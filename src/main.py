@@ -15,8 +15,8 @@ data_5 = scipy.io.loadmat('../resources/5Train/5.mat')
 data_7 = scipy.io.loadmat('../resources/7Train/7.mat')
 
 # Assign to numpy variables
-fea = np.array(ORL['fea'])
-gnd = np.array(ORL['gnd'])
+full_data = np.array(ORL['fea'])
+labels = np.array(ORL['gnd'])
 train_3 = np.array(data_3['trainIdx'])
 test_3 = np.array(data_3['testIdx'])
 train_5 = np.array(data_5['trainIdx'])
@@ -36,7 +36,6 @@ def print_multiple_faces(images, titles, rows, columns, should_save=True):
     if should_save:
         plt.savefig("../resources/output/{0}_multifigure.jpg".format(time.time()))
     plt.show()
-
 
 
 def print_faces(data, title, number_of_images, images_per_row, should_save=True):
@@ -98,12 +97,23 @@ def pca(data, k):
     return projected, eigenvectors, mean
 
 
-def get_nearest_neighbors(training_set, test_element):
-    distances = cdist(training_set, test_element, metric='euclidean')
-    return None
+def get_nearest_neighbor(training_set, test_set):
+    # Calculate distances
+    distances = cdist(training_set, test_set)
+
+    # Sort distances
+    sorted_indices = distances.argsort()
+
+    # Get first neighbor
+    return sorted_indices[-1]
+
 
 
 def reconstruct_image_from_eigenvectors(image_id):
+    projected_10, eigen_vectors_10, mean = pca(full_data, 10)
+    projected_20, eigen_vectors_20, mean = pca(full_data, 20)
+    projected_30, eigen_vectors_30, mean = pca(full_data, 30)
+
     # Reconstruct first image
     reconstructed = [
         mean,
@@ -124,22 +134,30 @@ def reconstruct_image_from_eigenvectors(image_id):
 
 if __name__ == "__main__":
     # Take train 3 data (indexes -1 for matlab compatibility)
-    training_data = fea[train_3.flatten() - 1]
-    test_data = fea[test_3.flatten() - 1]
+    train_indices = train_3.flatten() - 1
+    test_indices = test_3.flatten() - 1
+    training_data = full_data[train_indices]
+    test_data = full_data[test_indices]
 
     # Apply pca with different k values on training data
-    projected_10, eigen_vectors_10, mean = pca(training_data, 10)
-    projected_20, eigen_vectors_20, _ = pca(training_data, 20)
-    projected_30, eigen_vectors_30, _ = pca(training_data, 30)
+    projected_30_train, eigen_vectors_30_train, mean_train = pca(training_data, 30)
 
-    # Apply pca with different k values on training data
-    projected_10_test, eigen_vectors_10_test, mean_test = pca(test_data, 10)
-    projected_20_test, eigen_vectors_20_test, _ = pca(test_data, 20)
-    projected_30_test, eigen_vectors_30_test, _ = pca(test_data, 30)
+    # Apply pca with different k values on test data
+    projected_30_test, eigen_vectors_30_test, mean_test = pca(test_data, 30)
+
+    # Find the nearest faces for all the faces in the test dataset
+    predictions = get_nearest_neighbor(projected_30_train, projected_30_test)
+
+    print_multiple_faces(
+        [test_data[0], test_data[1], test_data[2], test_data[3], test_data[4],
+         full_data[predictions[0]], full_data[predictions[1]], full_data[predictions[2]], full_data[predictions[3]], full_data[predictions[4]]],
+        ["O0", "O1", "O2", "O3", "O4", "P0", "P1", "P2", "P3", "P4"],
+        2, 5, should_save=False
+    )
 
     # Plot first 16 components of pca
-    _, eigen_vectors_200, _ = pca(training_data, 200)
-    print_faces(eigen_vectors_30_test, "Eigen vectors", number_of_images=16, images_per_row=4)
+    # _, eigen_vectors_200, _ = pca(training_data, 200)
+    # print_faces(eigen_vectors_30_test, "Eigen vectors", number_of_images=16, images_per_row=4)
 
     # Reconstruct image from eigen vectors
-    reconstruct_image_from_eigenvectors(image_id=0)
+    # reconstruct_image_from_eigenvectors(image_id=3)
