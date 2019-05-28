@@ -16,4 +16,4 @@ Before applying the method, scale all image intensities so that they range from 
 
 # Run instructions
 
-python3.6 src/main.py
+python3.6 main.py
