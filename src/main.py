@@ -140,10 +140,10 @@ def get_nearest_neighbor(training_set, test_set):
     distances = cdist(training_set, test_set)
 
     # Sort distances and get back the indices of the sorted list
-    sorted_indices = distances.argsort(axis=0)
+    sorted_indices = np.argmin(distances, axis=0)
 
     # Get first neighbor
-    return sorted_indices[0]
+    return sorted_indices
 
 
 def reconstruct_image_from_eigenvectors(image_id):
@@ -199,17 +199,22 @@ def face_recognition():
     # Take train 3 data (indexes -1 for matlab compatibility)
     train_indices = train_3.flatten() - 1
     test_indices = test_3.flatten() - 1
+
     training_data = full_data[train_indices]
     test_data = full_data[test_indices]
 
     # Apply pca with different k values on training data
-    projected_30_train, eigen_vectors_30_train, mean_train = pca(training_data, 30)
+    projected_train, eigen_vectors_train, mean_train = pca(training_data, 30)
 
-    # Apply pca with different k values on test data
-    projected_30_test, eigen_vectors_30_test, mean_test = pca(test_data, 30)
+    # Subtract the mean from test_data
+    test_data = test_data / 255
+    test_data = test_data - mean_train
+
+    # Project test data on the space of train data.
+    projected_30_test = test_data.dot(eigen_vectors_train.T)
 
     # Find the nearest faces for all the faces in the test dataset
-    predictions_idx = get_nearest_neighbor(projected_30_train, projected_30_test)
+    predictions_idx = get_nearest_neighbor(projected_train, projected_30_test)
 
     # Calculate accuracy
     accuracy = get_accuracy(test_indices, train_indices, predictions_idx)
