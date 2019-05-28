@@ -4,6 +4,7 @@ import time
 import scipy.io
 from scipy.spatial.distance import cdist
 import math
+from tabulate import tabulate
 
 # Set matplotlib color map to greyscale always
 plt.rc('image', cmap='gray')
@@ -94,6 +95,37 @@ def print_face(face, title, should_save=True):
     plt.show()
 
 
+def plot_accuracies(x_axis_data, data, titles):
+    """
+    Plot fancy graph of the accuracy
+    :param x_axis_data: k values
+    :param data: accuracy per data set
+    :param titles: Titles for legend
+    """
+    # Plot each content of the data list
+    for i in range(len(data)):
+        plt.plot(x_axis_data, data[i], label=titles[i])
+        plt.ylabel('Accuracy')
+        plt.xlabel('k Value')
+        plt.legend()
+
+    plt.show()
+
+
+def print_pretty_accuracies(k_range, accuracies_for_train_3, accuracies_for_train_5, accuracies_for_train_7):
+    """
+    Print a fancy table for readability of the values
+    :param k_range: K values
+    :param accuracies_for_train_3: accuracy list for train 3
+    :param accuracies_for_train_5: accuracy list for train 5
+    :param accuracies_for_train_7: accuracy list for train 7
+    """
+    accuracies_for_train_3.insert(0, "Accuracy of 3")
+    accuracies_for_train_5.insert(0, "Accuracy of 5")
+    accuracies_for_train_7.insert(0, "Accuracy of 7")
+    print(tabulate([accuracies_for_train_3, accuracies_for_train_5, accuracies_for_train_7], headers=k_range))
+
+
 def pca(data, k):
     """
     Principal Component Analysis
@@ -101,13 +133,11 @@ def pca(data, k):
     :param k: number of features to keep
     :return: Projected values to the space, eigenvectors, mean
     """
-    standardized_data = data / 255
-
     # Calculate the mean of each column
-    mean = standardized_data.mean(axis=0)
+    mean = data.mean(axis=0)
 
     # Subtract mean from columns
-    subtracted = standardized_data - mean
+    subtracted = data - mean
 
     # Calculate covariance matrix
     covariance = np.cov(subtracted.T)
@@ -190,60 +220,94 @@ def get_accuracy(test_indices, train_indices, predictions_idx):
            len(identities_of_test_subjects)
 
 
-def face_recognition():
+def face_recognition(train, test, k, should_print_differences=True):
     """
     This function performs pca on training and test set and projects the data in the
     new features space. Then it uses the Nearest Neighbor algorithm to fetch the closest
     face to the test data.
     """
     # Take train 3 data (indexes -1 for matlab compatibility)
-    train_indices = train_3.flatten() - 1
-    test_indices = test_3.flatten() - 1
+    train_indices = train.flatten() - 1
+    test_indices = test.flatten() - 1
 
+    # Extract actual data based on indices
     training_data = full_data[train_indices]
     test_data = full_data[test_indices]
 
+    # Standardize data
+    training_data = training_data / 255
+    test_data = test_data / 255
+
     # Apply pca with different k values on training data
-    projected_train, eigen_vectors_train, mean_train = pca(training_data, 30)
+    projected_train, eigen_vectors_train, mean_train = pca(training_data, k)
 
     # Subtract the mean from test_data
-    test_data = test_data / 255
     test_data = test_data - mean_train
 
     # Project test data on the space of train data.
-    projected_30_test = test_data.dot(eigen_vectors_train.T)
+    projected_test = test_data.dot(eigen_vectors_train.T)
 
     # Find the nearest faces for all the faces in the test dataset
-    predictions_idx = get_nearest_neighbor(projected_train, projected_30_test)
+    predictions_idx = get_nearest_neighbor(projected_train, projected_test)
 
     # Calculate accuracy
     accuracy = get_accuracy(test_indices, train_indices, predictions_idx)
-    print("Accuracy: {0:.2f} %".format(accuracy * 100))
 
     # Plot the 8 first entries of the test data and the corresponding predicted ones
-    print_multiple_faces(
-        [
-            test_data[0], training_data[predictions_idx[0]],
-            test_data[1], training_data[predictions_idx[1]],
-            test_data[2], training_data[predictions_idx[2]],
-            test_data[3], training_data[predictions_idx[3]],
-            test_data[4], training_data[predictions_idx[4]],
-            test_data[5], training_data[predictions_idx[5]],
-            test_data[6], training_data[predictions_idx[6]],
-            test_data[7], training_data[predictions_idx[7]]
-        ],
-        [
-            "Original 0", "Predicted 0",
-            "Original 1", "Predicted 1",
-            "Original 2", "Predicted 2",
-            "Original 3", "Predicted 3",
-            "Original 4", "Predicted 4",
-            "Original 5", "Predicted 5",
-            "Original 6", "Predicted 6",
-            "Original 7", "Predicted 7"
-        ],
-        4, 4
+    if should_print_differences:
+        print_multiple_faces(
+            [
+                full_data[test_indices[0]], full_data[train_indices[predictions_idx[0]]],
+                full_data[test_indices[1]], full_data[train_indices[predictions_idx[1]]],
+                full_data[test_indices[2]], full_data[train_indices[predictions_idx[2]]],
+                full_data[test_indices[3]], full_data[train_indices[predictions_idx[3]]],
+                full_data[test_indices[4]], full_data[train_indices[predictions_idx[4]]],
+                full_data[test_indices[5]], full_data[train_indices[predictions_idx[5]]],
+                full_data[test_indices[6]], full_data[train_indices[predictions_idx[6]]],
+                full_data[test_indices[7]], full_data[train_indices[predictions_idx[7]]]
+            ],
+            [
+                "Original 0", "Predicted 0",
+                "Original 1", "Predicted 1",
+                "Original 2", "Predicted 2",
+                "Original 3", "Predicted 3",
+                "Original 4", "Predicted 4",
+                "Original 5", "Predicted 5",
+                "Original 6", "Predicted 6",
+                "Original 7", "Predicted 7"
+            ],
+            4, 4
+        )
+
+    return accuracy
+
+
+def experiment_k_values_and_datasets_face_recognition():
+    """
+    Make an experiment and try the accuracy of each of the train3, 5 and 7 datasets with different
+    k values
+    """
+    # Initiate lists to store the accuracies for each k value
+    accuracies_for_train_3 = []
+    accuracies_for_train_5 = []
+    accuracies_for_train_7 = []
+
+    # Select a range of k values
+    k_range = range(2, 200, 10)
+
+    # Try all 3 trainsets for each k value
+    for k in k_range:
+        accuracies_for_train_3.append(face_recognition(train_3, test_3, k, False))
+        accuracies_for_train_5.append(face_recognition(train_5, test_5, k, False))
+        accuracies_for_train_7.append(face_recognition(train_7, test_7, k, False))
+
+    plot_accuracies(
+        k_range,
+        [accuracies_for_train_3, accuracies_for_train_5, accuracies_for_train_7],
+        ["Accuracies for train 3", "Accuracies for train 5", "Accuracies for train 7"]
     )
+
+    print_pretty_accuracies(k_range, accuracies_for_train_3, accuracies_for_train_5, accuracies_for_train_7)
 
 
 if __name__ == "__main__":
@@ -254,5 +318,9 @@ if __name__ == "__main__":
     # Reconstruct image from eigen vectors
     reconstruct_image_from_eigenvectors(image_id=0)
 
-    # Perform face recognition using NN algorithm
-    face_recognition()
+    # Perform face recognition using NN algorithm and train 3 dataset
+    accuracy = face_recognition(train_3, test_3, k=30)
+    print("Accuracy: {0:.2f} %".format(accuracy * 100))
+
+    # Perform experiment with different k values and datasets, takes a bit of time
+    experiment_k_values_and_datasets_face_recognition()
